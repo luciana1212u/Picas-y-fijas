@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Picas y Fijas</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 700px; margin: 20px auto; padding: 0 10px; }
+    .caja { border: 1px solid #ccc; border-radius: 6px; padding: 12px; margin-bottom: 15px; }
+    input { padding: 6px; margin-right: 5px; }
+    button { padding: 6px 12px; cursor: pointer; }
+    table { border-collapse: collapse; width: 100%; }
+    td, th { border: 1px solid #ddd; padding: 5px; text-align: center; }
+    #mensaje { font-weight: bold; color: #b00020; }
+  </style>
+</head>
+<body>
+  <h1>Picas y Fijas</h1>
+  <p id="mensaje"></p>
+
+  <!-- 1. LOGIN -->
+  <div class="caja" id="cajaLogin">
+    <h3>1. Iniciar sesión</h3>
+    <input id="nombre" placeholder="Tu nombre">
+    <button onclick="login()">Entrar</button>
+  </div>
+
+  <!-- 2. CREAR JUEGO -->
+  <div class="caja" id="cajaCrear" style="display:none">
+    <h3>2. Crear un juego</h3>
+    <input id="numeroCrear" maxlength="4" placeholder="Tu número secreto">
+    <button onclick="crearJuego()">Crear juego</button>
+  </div>
+
+  <!-- 3. LISTA DE JUEGOS -->
+  <div class="caja" id="cajaLista" style="display:none">
+    <h3>3. Juegos</h3>
+    <p>Número secreto para unirte: <input id="numeroUnirse" maxlength="4" placeholder="Tu número secreto"></p>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Estado</th><th>Creador</th><th>Jugador 2</th><th>Ganador</th><th></th></tr>
+      </thead>
+      <tbody id="listaJuegos"></tbody>
+    </table>
+  </div>
+
+  <!-- 4. JUEGO ACTUAL -->
+  <div class="caja" id="cajaJuego" style="display:none">
+    <h3>Juego <span id="juegoId"></span></h3>
+    <p id="infoJuego"></p>
+    <input id="numeroJugar" maxlength="4" placeholder="Tu intento">
+    <button onclick="jugar()">Jugar</button>
+    <table>
+      <thead><tr><th>Jugador</th><th>Número</th><th>Fijas</th><th>Picas</th></tr></thead>
+      <tbody id="intentos"></tbody>
+    </table>
+  </div>
+
+  <script>
+    var miNombre = "";
+    var juegoActual = null;
+
+    function mostrarMensaje(texto) {
+      document.getElementById("mensaje").textContent = texto;
+    }
+
+    // Función genérica para llamar al servidor y devolver {ok, datos}
+    async function llamar(url, metodo, cuerpo) {
+      var opciones = { method: metodo, headers: { "Content-Type": "application/json" } };
+      if (cuerpo) opciones.body = JSON.stringify(cuerpo);
+      var respuesta = await fetch(url, opciones);
+      var datos = await respuesta.json();
+      if (!respuesta.ok) mostrarMensaje(datos.error);
+      else mostrarMensaje("");
+      return { ok: respuesta.ok, datos: datos };
+    }
+
+    async function login() {
+      var nombre = document.getElementById("nombre").value;
+      var r = await llamar("/login", "POST", { nombre: nombre });
+      if (r.ok) {
+        miNombre = r.datos.nombre;
+        document.getElementById("cajaLogin").style.display = "none";
+        document.getElementById("cajaCrear").style.display = "block";
+        document.getElementById("cajaLista").style.display = "block";
+        cargarLista();
+      }
+    }
+
+    async function crearJuego() {
+      var numero = document.getElementById("numeroCrear").value;
+      var r = await llamar("/juego", "POST", { nombre: miNombre, numero: numero });
+      if (r.ok) {
+        juegoActual = r.datos.id;
+        cargarLista();
+        cargarJuego();
+      }
+    }
+
+    async function unirse(id) {
+      var numero = document.getElementById("numeroUnirse").value;
+      var r = await llamar("/juego/" + id, "PUT", { nombre: miNombre, numero: numero });
+      if (r.ok) {
+        juegoActual = id;
+        cargarLista();
+        cargarJuego();
+      }
+    }
+
+    function verJuego(id) {
+      juegoActual = id;
+      cargarJuego();
+    }
+
+    async function jugar() {
+      var numero = document.getElementById("numeroJugar").value;
+      var r = await llamar("/juego/" + juegoActual + "/jugar", "POST", { nombre: miNombre, numero: numero });
+      if (r.ok) {
+        document.getElementById("numeroJugar").value = "";
+        cargarJuego();
+        cargarLista();
+      }
+    }
+
+    async function cargarLista() {
+      var r = await llamar("/juego", "GET");
+      var html = "";
+      r.datos.forEach(function (j) {
+        var boton = "";
+        if (j.estado === "sin completar" && j.creador !== miNombre) {
+          boton = "<button onclick='unirse(" + j.id + ")'>Unirme</button> ";
+        }
+        boton += "<button onclick='verJuego(" + j.id + ")'>Ver</button>";
+        html += "<tr><td>" + j.id + "</td><td>" + j.estado + "</td><td>" + j.creador +
+                "</td><td>" + (j.jugador2 || "-") + "</td><td>" + (j.ganador || "-") +
+                "</td><td>" + boton + "</td></tr>";
+      });
+      document.getElementById("listaJuegos").innerHTML = html;
+    }
+
+    async function cargarJuego() {
+      if (juegoActual === null) return;
+      var r = await llamar("/juego/" + juegoActual, "GET");
+      if (!r.ok) return;
+      var j = r.datos;
+      document.getElementById("cajaJuego").style.display = "block";
+      document.getElementById("juegoId").textContent = j.id;
+
+      var info = "Estado: " + j.estado + " | " + j.creador + " vs " + (j.jugador2 || "esperando rival...");
+      if (j.estado === "en juego") info += " | Turno de: " + j.turno;
+      if (j.estado === "terminado") info += " | Ganó: " + j.ganador;
+      document.getElementById("infoJuego").textContent = info;
+
+      var html = "";
+      j.intentos.forEach(function (i) {
+        html += "<tr><td>" + i.jugador + "</td><td>" + i.numero + "</td><td>" + i.fijas + "</td><td>" + i.picas + "</td></tr>";
+      });
+      document.getElementById("intentos").innerHTML = html;
+    }
+
+    // Se refresca solo cada 2 segundos para ver los cambios del rival
+    setInterval(function () {
+      if (miNombre !== "") {
+        cargarLista();
+        cargarJuego();
+      }
+    }, 2000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+# Deployment: le dice a Kubernetes cuántos pods correr y con qué imagen
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: picas-fijas
+spec:
+  # IMPORTANTE: 1 réplica, porque los juegos viven en la memoria del pod.
+  # Con 2 pods cada uno tendría sus propios juegos y se verían inconsistencias.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: picas-fijas
+  template:
+    metadata:
+      labels:
+        app: picas-fijas
+    spec:
+      containers:
+        - name: picas-fijas
+          # CAMBIA "TU_USUARIO" por tu usuario de Docker Hub
+          image: TU_USUARIO/picas-fijas:1.0
+          ports:
+            - containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+---
+# Service: expone el pod hacia afuera del cluster
+apiVersion: v1
+kind: Service
+metadata:
+  name: picas-fijas
+spec:
+  type: NodePort
+  selector:
+    app: picas-fijas
+  ports:
+    - port: 3000
+      targetPort: 3000
+      nodePort: 30080
