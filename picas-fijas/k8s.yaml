@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: picas-fijas
-          # CAMBIA "TU_USUARIO" por tu usuario de Docker Hub
+         
           image: TU_USUARIO/picas-fijas:1.0
           ports:
             - containerPort: 3000
