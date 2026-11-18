@@ -7,10 +7,10 @@ from flask import Flask, jsonify, request, send_from_directory
 app = Flask(__name__, static_folder="static")
 app.json.ensure_ascii = False  
 
-jugadores = set()   # nombres registrados con /login
-juegos = {}         # id -> diccionario con los datos del juego
-siguiente_id = 1    # contador para los IDs de los juegos
-candado = threading.Lock()  # evita que dos peticiones modifiquen a la vez
+jugadores = set()
+juegos = {}
+siguiente_id = 1
+candado = threading.Lock()
 
 SIN_COMPLETAR = "sin completar"   # creado, esperando al segundo jugador
 EN_JUEGO = "en juego"             # ya hay dos jugadores
@@ -21,24 +21,25 @@ TERMINADO = "terminado"           # alguien adivinó el número
 # Funciones auxiliares
 # ---------------------------------------------------------------
 def error(mensaje, codigo):
+    # Devuelve un mensaje de error con su codigo
     return jsonify({"error": mensaje}), codigo
 
 
 def validar_numero(numero):
-    """Devuelve un mensaje de error si el número no es válido, o None si está bien."""
+    """Devuelve un mensaje de error si el numero no es valido, o None si esta bien."""
     if not isinstance(numero, str):
-        return "El número debe enviarse como texto, por ejemplo \"4271\""
+        return "El numero debe enviarse como texto, por ejemplo \"4271\""
     if not numero.isdigit():
-        return "El número solo puede tener dígitos (sin letras ni símbolos)"
+        return "El numero solo puede tener digitos (sin letras ni simbolos)"
     if len(numero) != 4:
-        return "El número debe tener exactamente 4 dígitos"
+        return "El numero debe tener exactamente 4 digitos"
     if len(set(numero)) != 4:
-        return "Los 4 dígitos deben ser diferentes"
+        return "Los 4 digitos deben ser diferentes"
     return None
 
 
 def calcular_fijas_picas(secreto, intento):
-    """Fija = misma cifra en la misma posición. Pica = cifra existe pero en otra posición."""
+    """Fija = misma cifra en la misma posicion. Pica = cifra existe pero en otra posicion."""
     fijas = 0
     picas = 0
     for i in range(4):
@@ -50,7 +51,7 @@ def calcular_fijas_picas(secreto, intento):
 
 
 def resumen(juego):
-    """Datos públicos de un juego (nunca muestra los números secretos mientras se juega)."""
+    """Datos publicos de un juego (nunca muestra los numeros secretos mientras se juega)."""
     datos = {
         "id": juego["id"],
         "estado": juego["estado"],
@@ -63,11 +64,12 @@ def resumen(juego):
 
 
 def buscar_juego(juego_id):
+    # Busca un juego por su identificador
     return juegos.get(juego_id)
 
 
 def leer_json():
-    # silent=True: si el JSON es inválido devuelve None en lugar de lanzar error
+    # silent=True: si el JSON es invalido devuelve None en lugar de lanzar error
     datos = request.get_json(silent=True)
     if not isinstance(datos, dict):
         return {}
@@ -79,13 +81,13 @@ def leer_json():
 # ---------------------------------------------------------------
 @app.route("/")
 def inicio():
-    # Sirve el front básico
+    # Sirve el front basico
     return send_from_directory("static", "index.html")
 
 
 @app.route("/health")
 def health():
-    # Lo usa Kubernetes para saber si el pod está vivo
+    # Lo usa Kubernetes para saber si el pod esta vivo
     return jsonify({"status": "ok"})
 
 
@@ -94,7 +96,7 @@ def health():
 def login():
     nombre = leer_json().get("nombre")
     if not isinstance(nombre, str) or nombre.strip() == "":
-        return error("Debes enviar un 'nombre' válido", 400)
+        return error("Debes enviar un 'nombre' valido", 400)
     nombre = nombre.strip()
     with candado:
         jugadores.add(nombre)
@@ -121,7 +123,7 @@ def crear_juego():
             "estado": SIN_COMPLETAR,
             "jugador1": nombre,
             "jugador2": None,
-            "secretos": {nombre: numero},   # nombre -> su número secreto
+            "secretos": {nombre: numero},
             "turno": None,
             "ganador": None,
             "intentos": [],
@@ -179,15 +181,15 @@ def jugar(juego_id):
         if juego is None:
             return error("El juego no existe", 404)
         if juego["estado"] == SIN_COMPLETAR:
-            return error("El juego aún no inicia, falta el segundo jugador", 409)
+            return error("El juego aun no inicia, falta el segundo jugador", 409)
         if juego["estado"] == TERMINADO:
-            return error("El juego ya terminó, ganó " + juego["ganador"], 409)
+            return error("El juego ya termino, gano " + juego["ganador"], 409)
         if nombre not in juego["secretos"]:
             return error("No participas en este juego", 403)
         if juego["turno"] != nombre:
             return error("No es tu turno, le toca a " + juego["turno"], 409)
 
-        # El intento se compara contra el número del oponente
+
         oponente = juego["jugador2"] if nombre == juego["jugador1"] else juego["jugador1"]
         fijas, picas = calcular_fijas_picas(juego["secretos"][oponente], numero)
 
@@ -200,7 +202,7 @@ def jugar(juego_id):
             juego["ganador"] = nombre
             juego["turno"] = None
         else:
-            juego["turno"] = oponente  # se alterna el turno
+            juego["turno"] = oponente
 
         respuesta = {"fijas": fijas, "picas": picas, "estado": juego["estado"],
                      "ganador": juego["ganador"], "turno": juego["turno"]}
@@ -217,7 +219,7 @@ def ver_juego(juego_id):
         datos = resumen(juego)
         datos["intentos"] = juego["intentos"]
         if juego["estado"] == TERMINADO:
-            # Cuando termina ya se pueden revelar los números secretos
+
             datos["secretos"] = juego["secretos"]
     return jsonify(datos)
 
